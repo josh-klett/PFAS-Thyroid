@@ -1,2 +1,33 @@
 # PFAS-Thyroid
 Analysis was completed using NHANES data from 2017 and 2015, assessing the relationship between PFAS mixtures and thyroid disruption utilizing PCA.
+
+
+Computational Toxicology | 18 April 2022
+
+Assignment 7: Mixtures
+
+Introduction
+
+Perfluoroalkyl and polyfluoroalkyl substances (PFAS) are large and complex molecules produced in industry that are widespread, persistent, and bioaccumulative in our environment and have been proposed to cause adverse health effects (NIH, 2022). PFAS have been used inustriuously as surfactants, lubricants, paints, polishes, food packaging and flame retarding compounds (NIH, 2022). Perfluorooctanoic acid (PFOA) and perfluorooctane sulfonate (PFOS) are two species of PFAS that were manufactured for the longest period of time and are found most frequently in the environment (NIH, 2022). These PFAS are no longer used in the US, though they have been replaced with alternative species of PFAS (NIH, 2022). Exposure to PFAS can occur when these chemicals contaminate air, water and soil (NIH, 2022). The most common routes of exposure for humans to PFAS are ingesting food or water contaminated with PFAS, using products containing PFAS, or breathing air polluted with PFAS (NIH, 2022). Children are at highest risk of exposure to PFAS, as they ingest more water and food per body weight and are likely to crawl on the floor and put objects in their mouths and therefore be exposed to PFAS in household dust, carpets, cleaning products and toys (EPA, 2022). The CDC’s National Health and Nutrition Examination Survey (NHANES) in the year 2011-2012 found evidence of PFAS in the serum of 97% of participants (CDC, 2020). 
+PFAS occur as complex mixtures in the environment (CDC, 2020). Synthesis of PFAS between the 1950s and 2000s used electrochemical fluorination (ECF), which resulted in linear and branched isomers (NHANES, 2020). Fluorotelomerization, another method of PFAS synthesis, resulted in exclusively linear isomers (NHANES, 2020). The PFAS analytes tested in the NHANES assay are: perfluorodecanoate (PFDeA), perfluorohexane sulfonate (PFHxS),  perfluorononanoate (PFNA),  2-(Nmethyl-perfluorooctane sulfonamido) acetate (PFOSA-AcOH), perfluoroundecanoate (PFUA), sum of branched perfluorooctanoate isomers (Sb-PFOA), and sum of perfluoromethylheptane sulfonate isomers (Sm-PFOS) (NHANES, 2020).
+PFAS have been studied in association with several adverse health outcomes, including interference with thyroid function (Coperchini et al, 2021). It has been proposed that PFAS has adverse effects on the thyroid gland (Coperchini et al, 2021). Disruption of thyroid hormones could cause effects on the cardiovascular system, fertility, and fetal development (Coperchini et al, 2021). A meta-analysis of PFAS and thyroid function concluded that PFAS has a negative effect on total T4, and this effect varied by PFAS concentration (Kim et al, 2018). The association between PFAS and thyroid function remains inconclusive. The objective of our report is to analyze the PFAS analyte concentrations in blood samples collected and measured by NHANES in relation to participants' experience with thyroid problems. 
+
+
+Methods
+
+Data Compilation
+Data were compiled from the United States Center for Disease Control and Prevention’s National Health and Nutrition Examination Survey (NHANES). Two cycles worth of data were utilized for this analysis, 2017-2018 and 2015-2016. We used lab data from NHANES for PFAS concentration that was collected and measured in the participant's serum. Participants were 12 years or older and chosen by a ⅓ sample (n= 3200).
+The concentrations of 9 PFAS’s analytes were measured. Concentrations of linear PFOA (n-PFOA), sum of branched isomers of PFOA (Sb-PFOA, branched PFOA isomers), linear PFOS (n-PFOS), and sum of perfluoromethylheptane sulfonate isomers (Sm-PFOS, monomethyl branched PFOS isomers) were measured. These analytes were separated and measured by liquid chromatography and mass spectrometry 
+We used a binary measure for thyroid dysregulation. We used data from the question on NHANES,  “Has a doctor or other health professional ever told you that you had a thyroid problem,”  to which participants could answer “yes” or “no.” Thus, our definition of thyroid disease included conditions characterized by both hypothyroidism, an underfunctioning thyroid, and hyperthyroidism, an over-active thyroid.
+
+Data Wrangling
+	Three datasets were downloaded from NHANES for each cycle, the lab dataset containing PFAS concentrations, a demographic dataset containing age information, and a medical questionnaire dataset containing the information on the outcome of interest. Once downloaded from the NHANES website, R programming language was utilized to compile these data into a workable dataset and for all subsequent statistical analysis. 
+
+Data Cleaning
+	Once in a complete working dataset, the laboratory PFAS concentrations were assessed for normal distribution. All laboratory data was significantly right-skewed. Subsequently, laboratory PFAS concentrations were log transformed to result in a more normal distribution. PFAS variables were also analyzed for their percent below the limit of detection (LOD). Three analytes had a significant proportion of samples which were below the LOD. These three were PFUA, Sb-PFOA, and PFOSA-AcOH, which were marked for exclusion in the majority of analyses (Table 1). Lastly, the LOD for NHANES laboratory data is coded at 0.07, however these values were re-coded as the LOD/square root of two (= 0.0495) for all nine variables.
+
+Principal Component Analysis, Heatmap, and Correlation Plot:
+	Principal Component Analysis (PCA) was utilized to understand the interactions within the   PFAS mixture. The “pls” package was used to conduct the PCA, by utilizing the prcomp function. A heatmap of participant identifier on the y-axis and PFAS concentration on the x-axis was developed to demonstrate the distribution of concentration levels across the study population. The “tidyverse” package was used to construct the heatmap, utilizing the ggplot and geom_tile functions. Lastly, to identify which PFAS analytes were correlated with each other, a correlation density plot was constructed using the “ggcorrplot” package.
+
+Logistic Regression: 
+	Logistic Regression was utilized to statistically assess the relationship between thyroid dysregulation and PC1 & PC2. The “glm” function was utilized from the Base R “stats” package. The first analysis was conducted unadjusted, with no other variables included. The second analysis was conducted with age as an adjusted variable, in addition to the original variables. 
