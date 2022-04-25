@@ -1,0 +1,291 @@
+---
+title: "CompTox PFAS"
+author: "Joshua Klett"
+date: "4/5/2022"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Load Packages
+
+```{r cars}
+library(tidyverse)
+library(labelled)
+library(moderndive)
+library(haven)
+library(ggbiplot)
+library(ggplot2)
+library(ggcorrplot)
+library(ggfortify)  
+library(gridExtra)
+library(factoextra)
+library(ggrepel)
+library(psych)
+library(pals)
+library(GGally)
+library(pls)
+```
+
+## Importing and Merging
+
+
+```{r pressure, echo=FALSE}
+#Loading in PFAS Datasets
+
+pfas_2017 <- read_xpt("PFAS_J.17.XPT")
+pfas_2015 <- read_xpt("PFAS_I.15.XPT")
+
+pfas_2017 <- pfas_2017 %>% mutate(year= "2017")
+pfas_2015 <- pfas_2015 %>% mutate(year= "2015")
+#Loading in Health Outcome Questionare Data
+thyroid_2017 <- read_xpt("MCQ_J.17.XPT")
+thyroid_2015 <- read_xpt("MCQ_I.15.XPT")
+
+
+thyroid_2017 <- thyroid_2017 %>% mutate(year= "2017")
+thyroid_2015 <- thyroid_2015 %>% mutate(year= "2015")
+#Loading in Demographic Data
+demog_2017 <- read_xpt("DEMO_J.17.XPT")
+demog_2015 <- read_xpt("DEMO_I.15.XPT")
+
+demog_2017 <- demog_2017 %>% mutate(year= "2017")
+demog_2015 <- demog_2015 %>% mutate(year= "2015")
+
+pfas <- bind_rows(pfas_2017, pfas_2015)
+thyroid <- bind_rows(thyroid_2017, thyroid_2015)
+demog <- bind_rows(demog_2017, demog_2015)
+
+thyroid <- thyroid %>% select(SEQN, MCQ160M, MCQ170M, MCQ180M, MCQ220, MCQ230A)
+demog <- demog %>% select(SEQN, RIDAGEYR, RIAGENDR)
+pfas <- pfas %>% select(-LBXPFDO, -LBDPFDOL)
+
+pfas_join <- left_join(pfas, thyroid, by = "SEQN")
+pfas_join <- left_join(pfas_join, demog, by = "SEQN")
+
+```
+
+##Data Cleaning
+
+```{r}
+#filtering for only those who we have lab data on
+pfas_join <- pfas_join %>% filter(LBXPFDE != "NA")
+
+#R is reading as interger
+pfas_join <- pfas_join %>% mutate(MCQ160M = as.factor(MCQ160M))
+
+#renaming variables to be readable
+pfas_join <- pfas_join %>% dplyr::rename(thyroid_ever = MCQ160M, thyroid_current = MCQ170M, thyroid_age = MCQ180M, cancer = MCQ220, cancer_type = MCQ230A, age = RIDAGEYR, gender = RIAGENDR, PFDeA = LBXPFDE, PFHxS = LBXPFHS, PFOSA_AcOH = LBXMPAH, PFNA = LBXPFNA, PFUA = LBXPFUA, n_PFOA = LBXNFOA, Sb_PFOA = LBXBFOA, n_PFOS = LBXNFOS, Sm_PFOS = LBXMFOS)
+
+#filtering out those who do not know or are NA
+thy_ynfilt <- pfas_join %>% filter(thyroid_ever != "NA" & thyroid_ever != 9)
+thy_curfilt <- thy_ynfilt %>% filter(thyroid_current != "NA" & thyroid_current != 9)
+
+#coding 0 as no and 1 as yes
+thy_ynfilt <- thy_ynfilt %>% mutate(thyroid_ever = if_else(thyroid_ever == 2, 0, 1))
+thy_curfilt <- thy_curfilt %>% mutate(thyroid_current = if_else(thyroid_current == 2, 0, 1))
+
+#rewriting LOD
+thy_yn_reduced <-
+  thy_ynfilt %>% 
+  select(PFDeA, PFHxS, PFOSA_AcOH, PFNA, PFUA, n_PFOA, Sb_PFOA, n_PFOS, Sm_PFOS, thyroid_ever, age) %>% 
+  mutate(PFDeA = replace(PFDeA, PFDeA == 0.07, 0.0495),
+         PFHxS = replace(PFHxS, PFHxS == 0.07, 0.0495),
+         PFOSA_AcOH = replace(PFOSA_AcOH, PFOSA_AcOH == 0.07, 0.0495),
+         PFNA = replace(PFNA, PFNA == 0.07, 0.0495),
+         PFUA = replace(PFUA, PFUA == 0.07, 0.0495),
+         n_PFOA = replace(n_PFOA, n_PFOA == 0.07, 0.0495),
+         Sb_PFOA = replace(Sb_PFOA, Sb_PFOA == 0.07, 0.0495),
+         n_PFOS = replace(n_PFOS, n_PFOS == 0.07, 0.0495),
+         Sm_PFOS = replace(Sm_PFOS, Sm_PFOS == 0.07, 0.0495))
+
+#log transforming
+thy_yn_reduced <- thy_yn_reduced %>% mutate(logPFDeA = log(PFDeA))
+thy_yn_reduced <- thy_yn_reduced %>% mutate(logPFHxS = log(PFHxS))
+thy_yn_reduced <- thy_yn_reduced %>% mutate(logPFOSA_AcOH = log(PFOSA_AcOH))
+thy_yn_reduced <- thy_yn_reduced %>% mutate(logPFNA = log(PFNA))
+thy_yn_reduced <- thy_yn_reduced %>% mutate(logPFUA = log(PFUA))
+thy_yn_reduced <- thy_yn_reduced %>% mutate(logn_PFOA = log(n_PFOA))
+thy_yn_reduced <- thy_yn_reduced %>% mutate(logSb_PFAO = log(Sb_PFOA))
+thy_yn_reduced <- thy_yn_reduced %>% mutate(logn_PFOS = log(n_PFOS))
+thy_yn_reduced <- thy_yn_reduced %>% mutate(logSm_PFOS = log(Sm_PFOS))
+
+```
+
+```{r}
+#PCA
+##selecting for chemicals with high levels of LOD  (PFOSA_AcOH PFUA, Sb_PFOA)
+
+thy_yn_reduced <- thy_yn_reduced %>% select(!PFOSA_AcOH & !logPFOSA_AcOH & !PFUA & !logPFUA & !Sb_PFOA & !logSb_PFAO)
+
+pfas_pca_log <- prcomp(thy_yn_reduced[,c(9:14)], center = TRUE, scale = TRUE)
+
+summary(pfas_pca_log)
+
+#ggbiplot(pfas_pca)
+
+#ggbiplot(pfas_pca) +
+ # xlim(0,2) +
+  #ylim(-2,1)
+
+#looking at PCs 2 v 3
+#ggbiplot(pfas_pca,choices=c(2,3)) +
+ # xlim(-2,1) +
+  #ylim(-1,1)
+
+#scree
+var_explained = pfas_pca_log$sdev^2 / sum(pfas_pca_log$sdev^2)
+
+qplot(c(1:6), var_explained) +
+  geom_line()
+
+eigenvalues.v <- pfas_pca_log$sdev^2
+
+perc_variance.v <- eigenvalues.v/sum(eigenvalues.v)
+
+# 2d.ii Put percent variance in percentage format 
+
+perc_variance.v <- round(100 * perc_variance.v, 1)
+
+# 2d.iii Compute cumulative percent variance explained
+
+cumulative_perc_var.v <- cumsum(perc_variance.v)
+
+# 2d.iv Create dataframe 
+
+eigenvalues.constituent <- data.frame(Principal_Component = c(1:length(eigenvalues.v)), 
+                             Eigenvalues = eigenvalues.v, 
+                             Proportion_Var_Explained = perc_variance.v, 
+                             Cumulative_Proportion = cumulative_perc_var.v)
+
+# 2d.v View eignvalues 
+
+eigenvalues.constituent
+
+# Since we scaled the exposure data, the variables have a variance of 1 
+# so any PC with an eigenvalue > 1 is explaining more of the variability 
+# of the data than a column of the original constituent data 
+
+fviz_eig(pfas_pca_log, main = "Percent Variance Explained \n by Principal Component",
+         xlab = "Principal Component",
+         ylim = c(0,70)) 
+
+loadings.constituent <- as.data.frame.matrix(pfas_pca_log$rotation) 
+
+# 3b.ii Create column with names of constituents
+
+loadings.constituent$Constituent <- row.names(loadings.constituent)
+
+# 3b.iii Put loading data in long format 
+
+loadings.long <- loadings.constituent %>% 
+  gather(key = "PC", value = "Loading", -Constituent) 
+
+# 3b.iv Plot just 2 Principal Components
+
+loadings.long.2PC <- loadings.long %>% 
+  filter(PC %in% c("PC1", "PC2")) 
+
+loadings.long.2PC$Constituent <- factor(loadings.long.2PC$Constituent,
+levels = c("logPFDeA", "logPFHxS", "logPFNA", "logn_PFOA", "logn_PFOS", "logSm_PFOS"),
+labels = c("logPFDeA", "logPFHxS", "logPFNA", "logn_PFOA", "logn_PFOS", "logSm_PFOS"))
+
+# choose color palette
+
+
+# make plot 
+plot1=ggplot(loadings.long.2PC, aes(x = Constituent, y = Loading)) + 
+  geom_col(aes(color = Constituent, fill= Constituent)) +  # creates a column for each loading
+  geom_hline(yintercept = 0, size = 0.2) + # creates a line at 0
+  facet_wrap(. ~ PC) +                       # creates a distinct box for each PC 
+  theme_bw() +
+  theme(strip.background = element_rect(fill = "white")) +
+  labs(x = "PCA loadings",
+       y = "Loadings",
+       title = "PFC Principal Component Analysis") + 
+  scale_color_viridis_d()+
+  scale_fill_viridis_d()+
+  theme(axis.text.x=element_blank(),
+        axis.title.x=element_blank())
+
+
+plot1
+
+#logged corr plot
+
+thy_ynfiltsel2 <- thy_yn_reduced %>% select(logPFDeA, logPFHxS, logPFNA, logn_PFOA, logn_PFOS, logSm_PFOS)
+corr2 <- round(cor(thy_ynfiltsel2), 1)
+
+head(corr2)
+
+p.mat2 <- cor_pmat(thy_ynfiltsel2)
+
+ggcorrplot(corr2, outline.color = "white", method = "circle", p.mat = p.mat2) + scale_fill_gradient(low = "white", high = "red", breaks=c(0,0.2,0.4,0.6, 0.8, 1), limit=c(0,1)) + labs(fill = "Correlation") + labs(title = "PFC Correlation Plot", caption = "X marks represent non-significance")
+
+heat_data <- thy_ynfilt %>% select(SEQN, logPFDeA, logPFHxS, logPFOSA_AcOH, logPFNA, logPFUA, logn_PFOA, logSb_PFAO, logn_PFOS, logSm_PFOS)
+
+#need SEQN to be sequential for the heatmap to work so transforming accordingly
+heat_data3 <- transform(heat_data, ID = as.numeric(factor(SEQN)))
+heat_data3 <- heat_data3 %>% select(!SEQN)
+
+heat_data1 <- heat_data3 %>% pivot_longer(!ID, names_to = "Chemical", values_to = "Change") %>% 
+  mutate(Change = as.numeric(Change))
+
+heat_data1 <- heat_data1 %>% filter(Chemical != "logSb_PFAO" & Change > -2.65926)
+
+ggplot(heat_data1, aes(x = Chemical, y = ID, fill = Change)) + geom_tile()+
+  scale_fill_viridis_b()+
+  theme(axis.text.y = element_blank())+
+  guides(fill = guide_colourbar(title = "Log Concentration", ticks = FALSE)) +
+  labs(title = "PFC Analyte Data From NHANES", x = "PFC Analyte", y = "Identifier")
+
+##Logistic Regression: ##non-logged is not relevant here
+#pfas_join1 <- pfas_join %>% select(PFDeA, PFHxS, PFOSA_AcOH, PFNA, PFUA, n_PFOA, Sb_PFOA, n_PFOS, Sm_PFOS)
+
+#pfas_pca1 <- prcomp(thy_ynfilt[,c(4,6,8,10,12,14,16,18,20)], center = TRUE, scale = TRUE)
+
+#score <- as_tibble(factoextra::get_pca_ind(pfas_pca1)$coord)
+
+#mod <- cbind(thy_ynfilt[22], score[1:2])
+
+#fit <- glm(thyroid_ever~Dim.1+Dim.2, data=mod)
+#coef(summary(fit))[,4]
+
+
+#logged logistic reg with no adjustment
+pfas_join2 <- pfas_join %>% select(logPFDeA, logPFHxS, logPFOSA_AcOH, logPFNA, logPFUA, logn_PFOA, logSb_PFAO, logn_PFOS, logSm_PFOS)
+
+
+pfas_pca2 <- prcomp(thy_yn_reduced[,c(9:14)], center = TRUE, scale = TRUE)
+
+score2 <- as_tibble(factoextra::get_pca_ind(pfas_pca2)$coord)
+
+mod2 <- cbind(thy_yn_reduced[7], score2[1:2])
+
+fit2 <- glm(thyroid_ever~Dim.1+Dim.2, data=mod2)
+fit2
+coef(summary(fit2))[,4]
+
+#grouping PCA by age variables?
+#filtering for those aged 16 and above
+thy_ynfiltage <- thy_yn_reduced %>% filter(age >= 16)
+
+pfas_pca3 <- prcomp(thy_ynfiltage[,c(9:14)], center = TRUE, scale = TRUE)
+
+age_pca <- thy_ynfiltage %>% mutate(age_groups = if_else(age >= 16 & age < 30, 1, if_else(age >= 30 & age < 45, 2, if_else(age >= 45 & age < 60, 3, 4))))
+
+#plotting to see the groupings by age
+autoplot(pfas_pca3, data=age_pca, colour="age_groups") + facet_wrap(~ age_groups) + labs(title = "Principal Component Effect by Age Group") 
+#log reg, including age as a predictor
+score3 <- as_tibble(factoextra::get_pca_ind(pfas_pca3)$coord)
+age_mod <- cbind(age_pca[7], age_pca[8], score3[1:2])
+
+fit3 <- glm(thyroid_ever~Dim.1+Dim.2+age, data=age_mod)
+fit3
+coef(summary(fit3))[,4]
+```
+
